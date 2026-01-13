@@ -4,17 +4,49 @@
     {
       "name": "themes",
       "display_name": "Themes & UI Improvements",
-      "items": []
+      "items": [
+        {
+          "id": "install_carbon_theme.sh",
+          "name": "Carbon Theme",
+          "description": "Clean, modern EmulationStation theme"
+        },
+        {
+          "id": "install_pixel_theme.sh",
+          "name": "Pixel Theme",
+          "description": "Retro pixel art theme"
+        },
+        {
+          "id": "enable_video_view.sh",
+          "name": "Enable Video Previews",
+          "description": "Enable video preview support in ES"
+        }
+      ]
     },
     {
       "name": "performance",
       "display_name": "Performance Optimizations",
-      "items": []
+      "items": [
+        {
+          "id": "safe_overclock.sh",
+          "name": "Safe Overclock",
+          "description": "Apply safe overclock presets"
+        },
+        {
+          "id": "optimize_gpu_memory.sh",
+          "name": "Optimize GPU Memory",
+          "description": "Set optimal GPU memory split"
+        }
+      ]
     },
     {
       "name": "ports",
       "display_name": "Game Ports & Engines",
       "items": [
+        {
+          "id": "install_openbor.sh",
+          "name": "OpenBOR",
+          "description": "Beat 'em up game engine"
+        },
         {
           "id": "install_tiny_crate.sh",
           "name": "Tiny Crate",
@@ -25,7 +57,28 @@
     {
       "name": "utilities",
       "display_name": "Utilities & Tools",
-      "items": []
+      "items": [
+        {
+          "id": "install_skyscraper.sh",
+          "name": "Skyscraper",
+          "description": "Advanced ROM scraper"
+        },
+        {
+          "id": "install_kodi.sh",
+          "name": "Kodi Media Center",
+          "description": "Media center application"
+        },
+        {
+          "id": "setup_samba.sh",
+          "name": "Samba Network Shares",
+          "description": "Access ROMs over network"
+        },
+        {
+          "id": "install_moonlight.sh",
+          "name": "Moonlight",
+          "description": "Game streaming client"
+        }
+      ]
     }
   ]
 }
