@@ -64,6 +64,11 @@
       "display_name": "Utilities & Tools",
       "items": [
         {
+          "id": "setup_retrokiss_menu.sh",
+          "name": "Add RetroKISS to Ports Menu",
+          "description": "Launch RetroKISS from EmulationStation"
+        },
+        {
           "id": "install_skyscraper.sh",
           "name": "Skyscraper",
           "description": "Advanced ROM scraper"
