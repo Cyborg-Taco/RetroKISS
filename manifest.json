@@ -16,6 +16,12 @@
       "display_name": "Game Ports & Engines",
       "items": []
     },
+        {
+          "id": "install_tiny_crate.sh.sh",
+          "name": "Tiny Crate",
+          "description": "Crate-chucking action puzzler"
+        }
+
     {
       "name": "utilities",
       "display_name": "Utilities & Tools",
