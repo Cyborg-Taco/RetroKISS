@@ -43,6 +43,11 @@
       "display_name": "Game Ports & Engines",
       "items": [
         {
+           "id": "install_minecraft_bedrock.sh",
+           "name": "Minecraft Bedrock Edition",
+           "description": "Install Minecraft Bedrock via Flatpak"
+        },
+        {
           "id": "install_openbor.sh",
           "name": "OpenBOR",
           "description": "Beat 'em up game engine"
