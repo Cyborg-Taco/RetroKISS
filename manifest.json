@@ -78,10 +78,11 @@
       "display_name": "Game Ports & Engines",
       "items": [
         {
-          "id": "Install_Tiny_Crate.sh",
+          "id": "install_tiny_crate.sh.sh",
           "name": "Tiny Crate",
-          "description": "Crate-chucking action puzzler"
+          "description": ""
         }
+
         {
           "id": "install_openbor.sh",
           "name": "OpenBOR",
