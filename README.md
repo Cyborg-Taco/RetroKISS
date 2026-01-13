@@ -1,7 +1,7 @@
 # Download the script
     wget https://github.com/Cyborg-Taco/RetroKISS/blob/main/retrokiss.sh
 # Make it executable
-    chmod +x RetroKISS.sh
+    chmod +x retrokiss.sh
 
 # Run it
-    sudo ./RetroKISS.sh
+    sudo ./retrokiss.sh
