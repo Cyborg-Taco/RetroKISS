@@ -1,0 +1,154 @@
+{
+  "version": "1.0.0",
+  "categories": [
+    {
+      "name": "themes",
+      "display_name": "Themes & UI Improvements",
+      "items": [
+        {
+          "id": "install_carbon_theme.sh",
+          "name": "Carbon Theme",
+          "description": "Clean, modern EmulationStation theme"
+        },
+        {
+          "id": "install_pixel_theme.sh",
+          "name": "Pixel Theme",
+          "description": "Retro pixel art theme"
+        },
+        {
+          "id": "install_tronkyfran_theme.sh",
+          "name": "Tronkyfran Theme",
+          "description": "Sleek, minimalist theme"
+        },
+        {
+          "id": "install_comicbook_theme.sh",
+          "name": "ComicBook Theme",
+          "description": "Comic book style theme"
+        },
+        {
+          "id": "enable_video_view.sh",
+          "name": "Enable Video Previews",
+          "description": "Enable video preview support in ES"
+        },
+        {
+          "id": "optimize_es_performance.sh",
+          "name": "Optimize EmulationStation",
+          "description": "Performance tweaks for ES"
+        }
+      ]
+    },
+    {
+      "name": "performance",
+      "display_name": "Performance Optimizations",
+      "items": [
+        {
+          "id": "safe_overclock.sh",
+          "name": "Safe Overclock",
+          "description": "Apply safe overclock presets"
+        },
+        {
+          "id": "optimize_gpu_memory.sh",
+          "name": "Optimize GPU Memory",
+          "description": "Set optimal GPU memory split"
+        },
+        {
+          "id": "disable_services.sh",
+          "name": "Disable Unnecessary Services",
+          "description": "Free up system resources"
+        },
+        {
+          "id": "enable_threaded_video.sh",
+          "name": "Threaded Video Driver",
+          "description": "Enable threaded rendering in RetroArch"
+        },
+        {
+          "id": "optimize_swap.sh",
+          "name": "Optimize Swap",
+          "description": "Configure swap for better performance"
+        },
+        {
+          "id": "full_performance_package.sh",
+          "name": "Full Performance Package",
+          "description": "Apply all performance optimizations"
+        }
+      ]
+    },
+    {
+      "name": "ports",
+      "display_name": "Game Ports & Engines",
+      "items": [
+        {
+          "id": "install_openbor.sh",
+          "name": "OpenBOR",
+          "description": "Beat 'em up game engine"
+        },
+        {
+          "id": "install_scummvm_extras.sh",
+          "name": "ScummVM Extras",
+          "description": "Additional ScummVM support"
+        },
+        {
+          "id": "install_doom.sh",
+          "name": "Doom (PrBoom)",
+          "description": "Classic Doom engine"
+        },
+        {
+          "id": "install_quake.sh",
+          "name": "Quake",
+          "description": "Quake game engine"
+        },
+        {
+          "id": "install_cavestory.sh",
+          "name": "Cave Story",
+          "description": "Free indie platformer"
+        },
+        {
+          "id": "install_srb2.sh",
+          "name": "Sonic Robo Blast 2",
+          "description": "3D Sonic fan game"
+        }
+      ]
+    },
+    {
+      "name": "utilities",
+      "display_name": "Utilities & Tools",
+      "items": [
+        {
+          "id": "install_skyscraper.sh",
+          "name": "Skyscraper",
+          "description": "Advanced ROM scraper"
+        },
+        {
+          "id": "install_kodi.sh",
+          "name": "Kodi Media Center",
+          "description": "Media center application"
+        },
+        {
+          "id": "install_moonlight.sh",
+          "name": "Moonlight",
+          "description": "Game streaming client"
+        },
+        {
+          "id": "install_mc.sh",
+          "name": "Midnight Commander",
+          "description": "Terminal file manager"
+        },
+        {
+          "id": "setup_samba.sh",
+          "name": "Samba Network Shares",
+          "description": "Access ROMs over network"
+        },
+        {
+          "id": "install_retropie_manager.sh",
+          "name": "RetroPie Manager",
+          "description": "Web-based management interface"
+        },
+        {
+          "id": "install_bluetooth_audio.sh",
+          "name": "Bluetooth Audio",
+          "description": "Enable Bluetooth audio support"
+        }
+      ]
+    }
+  ]
+}
