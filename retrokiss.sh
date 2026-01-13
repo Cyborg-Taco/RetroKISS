@@ -1,101 +1,41 @@
 #!/bin/bash
 #
 # RetroKISS - RetroPie Kick-start Install Script Suite
-# A PiKISS-style menu-driven installer for RetroPie enhancements
+# A modular installer that pulls scripts from GitHub
 #
 # Usage: sudo ./retrokiss.sh
 #
 
 set -e
 
-# Color definitions
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-MAGENTA='\033[0;35m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-BOLD='\033[1m'
-
 # Configuration
+GITHUB_REPO="https://raw.githubusercontent.com/Cyborg-Taco/RetroKISS/main"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CACHE_DIR="$SCRIPT_DIR/.retrokiss_cache"
+CONFIG_FILE="$SCRIPT_DIR/retrokiss.conf"
 LOG_FILE="$SCRIPT_DIR/retrokiss.log"
-RETROPIE_HOME="/opt/retropie"
-RETROPIE_CONFIGS="/opt/retropie/configs"
-ROMS_DIR="$HOME/RetroPie/roms"
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then 
-    echo -e "${RED}Please run as root (use sudo)${NC}"
+    echo "Please run as root (use sudo)"
     exit 1
 fi
 
-# Get actual user (not root when using sudo)
+# Get actual user
 ACTUAL_USER="${SUDO_USER:-$USER}"
 ACTUAL_HOME=$(eval echo "~$ACTUAL_USER")
+
+# Create cache directory
+mkdir -p "$CACHE_DIR"
 
 # Logging function
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
 
-# Banner function
-show_banner() {
-    clear
-    echo -e "${CYAN}${BOLD}"
-    echo "============================================================"
-    echo "                                                            "
-    echo "              RetroKISS - RetroPie Enhanced                 "
-    echo "         Kick-start Install Script Suite v1.0              "
-    echo "                                                            "
-    echo "============================================================"
-    echo -e "${NC}"
-}
-
-# Progress spinner
-spinner() {
-    local pid=$1
-    local delay=0.1
-    local spinstr='|/-\'
-    while ps -p $pid > /dev/null 2>&1; do
-        local temp=${spinstr#?}
-        printf " [%c]  " "$spinstr"
-        local spinstr=$temp${spinstr%"$temp"}
-        sleep $delay
-        printf "\b\b\b\b\b\b"
-    done
-    printf "    \b\b\b\b"
-}
-
-# Success/Error messages
-success_msg() {
-    echo -e "${GREEN}[SUCCESS] $1${NC}"
-    log "SUCCESS: $1"
-}
-
-error_msg() {
-    echo -e "${RED}[ERROR] $1${NC}"
-    log "ERROR: $1"
-}
-
-info_msg() {
-    echo -e "${BLUE}[INFO] $1${NC}"
-}
-
-warning_msg() {
-    echo -e "${YELLOW}[WARNING] $1${NC}"
-}
-
-# Pause function
-pause() {
-    echo ""
-    read -p "Press [Enter] to continue..."
-}
-
 # Check dependencies
 check_dependencies() {
-    local deps=("dialog" "wget" "git" "curl")
+    local deps=("dialog" "wget" "git" "curl" "jq")
     local missing=()
     
     for dep in "${deps[@]}"; do
@@ -105,467 +45,182 @@ check_dependencies() {
     done
     
     if [ ${#missing[@]} -gt 0 ]; then
-        info_msg "Installing missing dependencies: ${missing[*]}"
+        echo "Installing missing dependencies: ${missing[*]}"
         apt-get update -qq
         apt-get install -y "${missing[@]}" > /dev/null 2>&1
-        success_msg "Dependencies installed"
     fi
 }
 
-###############################################################################
-# THEMES AND UI IMPROVEMENTS
-###############################################################################
+# Download manifest from GitHub
+download_manifest() {
+    local manifest_url="$GITHUB_REPO/manifest.json"
+    local manifest_file="$CACHE_DIR/manifest.json"
+    
+    wget -q -O "$manifest_file" "$manifest_url" 2>/dev/null || {
+        dialog --title "Error" --msgbox "Failed to download manifest from GitHub.\nCheck your internet connection." 8 50
+        return 1
+    }
+    
+    echo "$manifest_file"
+}
 
-install_es_theme() {
-    local theme_name=$1
-    local theme_url=$2
-    local theme_dir="/etc/emulationstation/themes/$theme_name"
+# Parse manifest and build menu
+parse_manifest() {
+    local manifest_file=$1
+    local category=$2
     
-    info_msg "Installing theme: $theme_name"
-    
-    if [ -d "$theme_dir" ]; then
-        warning_msg "Theme already exists. Updating..."
-        rm -rf "$theme_dir"
-    fi
-    
-    mkdir -p "/etc/emulationstation/themes"
-    git clone --depth 1 "$theme_url" "$theme_dir" > /dev/null 2>&1 &
-    local git_pid=$!
-    spinner $git_pid
-    wait $git_pid
-    
-    if [ $? -eq 0 ]; then
-        success_msg "Theme $theme_name installed successfully"
-    else
-        error_msg "Failed to install theme"
+    if [ ! -f "$manifest_file" ]; then
         return 1
     fi
+    
+    # Extract items for the category
+    jq -r ".categories[] | select(.name==\"$category\") | .items[] | \"\(.id)|\(.name)|\(.description)\"" "$manifest_file"
 }
 
-themes_menu() {
+# Download and execute script
+run_script() {
+    local script_name=$1
+    local script_url="$GITHUB_REPO/scripts/$script_name"
+    local script_file="$CACHE_DIR/$script_name"
+    
+    # Show progress
+    dialog --title "Downloading" --infobox "Downloading $script_name..." 5 50
+    
+    # Download script
+    wget -q -O "$script_file" "$script_url" 2>/dev/null || {
+        dialog --title "Error" --msgbox "Failed to download script: $script_name" 8 50
+        return 1
+    }
+    
+    # Make executable
+    chmod +x "$script_file"
+    
+    # Execute script
+    clear
+    bash "$script_file"
+    local exit_code=$?
+    
+    # Show result
+    if [ $exit_code -eq 0 ]; then
+        dialog --title "Success" --msgbox "Script completed successfully!" 6 40
+    else
+        dialog --title "Error" --msgbox "Script failed with exit code: $exit_code" 8 50
+    fi
+    
+    return $exit_code
+}
+
+# Build dynamic menu from manifest
+show_category_menu() {
+    local category=$1
+    local title=$2
+    local manifest_file="$CACHE_DIR/manifest.json"
+    
     while true; do
-        show_banner
-        echo -e "${MAGENTA}${BOLD}THEMES & UI IMPROVEMENTS${NC}"
-        echo ""
-        echo "1) Install Carbon Theme (Clean, modern)"
-        echo "2) Install Pixel Theme (Retro pixel art)"
-        echo "3) Install Tronkyfran Theme (Sleek, minimalist)"
-        echo "4) Install ComicBook Theme (Comic style)"
-        echo "5) Install Epic Noir Theme (Dark, elegant)"
-        echo "6) Install Video View Support"
-        echo "7) Optimize EmulationStation Performance"
-        echo ""
-        echo "0) Back to Main Menu"
-        echo ""
-        read -p "Select option: " choice
+        local menu_items=()
+        local counter=1
         
-        case $choice in
-            1)
-                install_es_theme "carbon" "https://github.com/RetroPie/es-theme-carbon.git"
-                pause
-                ;;
-            2)
-                install_es_theme "pixel" "https://github.com/ehettervik/es-theme-pixel.git"
-                pause
-                ;;
-            3)
-                install_es_theme "tronkyfran" "https://github.com/HerbFargus/es-theme-tronkyfran.git"
-                pause
-                ;;
-            4)
-                install_es_theme "ComicBook" "https://github.com/TMNTturtleguy/es-theme-ComicBook.git"
-                pause
-                ;;
-            5)
-                install_es_theme "epic-noir" "https://github.com/c64-dev/es-theme-epicnoir.git"
-                pause
-                ;;
-            6)
-                info_msg "Enabling video view support..."
-                if [ -f "/opt/retropie/configs/all/emulationstation/es_settings.cfg" ]; then
-                    sed -i 's/<bool name="VideoAudio" value="false"\/>/<bool name="VideoAudio" value="true"\/>/' /opt/retropie/configs/all/emulationstation/es_settings.cfg 2>/dev/null || true
-                    sed -i 's/<bool name="EnableVideos" value="false"\/>/<bool name="EnableVideos" value="true"\/>/' /opt/retropie/configs/all/emulationstation/es_settings.cfg 2>/dev/null || true
-                    success_msg "Video support enabled"
-                else
-                    warning_msg "ES settings file not found"
-                fi
-                pause
-                ;;
-            7)
-                info_msg "Optimizing EmulationStation..."
-                if [ -f "/opt/retropie/configs/all/emulationstation/es_settings.cfg" ]; then
-                    sed -i 's/<string name="TransitionStyle" value=".*"\/>/<string name="TransitionStyle" value="instant"\/>/' /opt/retropie/configs/all/emulationstation/es_settings.cfg 2>/dev/null || true
-                    success_msg "EmulationStation optimized"
-                else
-                    warning_msg "ES settings file not found"
-                fi
-                pause
-                ;;
-            0)
-                break
-                ;;
-            *)
-                error_msg "Invalid option"
-                pause
-                ;;
-        esac
+        # Parse manifest for this category
+        while IFS='|' read -r id name description; do
+            menu_items+=("$counter" "$name")
+            counter=$((counter + 1))
+        done < <(parse_manifest "$manifest_file" "$category")
+        
+        # Add back option
+        menu_items+=("0" "Back to Main Menu")
+        
+        # Show menu
+        local choice=$(dialog --clear --title "$title" \
+            --menu "Select an option:" 20 70 15 \
+            "${menu_items[@]}" \
+            2>&1 >/dev/tty)
+        
+        clear
+        
+        # Handle selection
+        if [ $? -ne 0 ] || [ "$choice" = "0" ]; then
+            break
+        fi
+        
+        # Get the selected item
+        local selected_line=$(parse_manifest "$manifest_file" "$category" | sed -n "${choice}p")
+        local script_id=$(echo "$selected_line" | cut -d'|' -f1)
+        
+        # Run the script
+        run_script "$script_id"
     done
 }
 
-###############################################################################
-# PERFORMANCE OPTIMIZATIONS
-###############################################################################
-
-performance_menu() {
-    while true; do
-        show_banner
-        echo -e "${MAGENTA}${BOLD}PERFORMANCE OPTIMIZATIONS${NC}"
-        echo ""
-        echo "1) Overclock Raspberry Pi (Safe presets)"
-        echo "2) Optimize Memory Split"
-        echo "3) Disable Unnecessary Services"
-        echo "4) Enable Threaded Video Driver"
-        echo "5) Optimize Swap Settings"
-        echo "6) Full Performance Package (All above)"
-        echo ""
-        echo "0) Back to Main Menu"
-        echo ""
-        read -p "Select option: " choice
-        
-        case $choice in
-            1)
-                info_msg "Applying safe overclock settings..."
-                warning_msg "This will modify /boot/config.txt"
-                read -p "Continue? (y/n): " confirm
-                if [[ $confirm == [yY] ]]; then
-                    cp /boot/config.txt /boot/config.txt.backup
-                    
-                    if grep -q "Raspberry Pi 4" /proc/cpuinfo; then
-                        echo "" >> /boot/config.txt
-                        echo "# RetroKISS Overclock Settings (Pi 4)" >> /boot/config.txt
-                        echo "over_voltage=6" >> /boot/config.txt
-                        echo "arm_freq=2000" >> /boot/config.txt
-                        echo "gpu_freq=750" >> /boot/config.txt
-                        success_msg "Overclock applied (Pi 4)"
-                    else
-                        echo "" >> /boot/config.txt
-                        echo "# RetroKISS Overclock Settings (Pi 3)" >> /boot/config.txt
-                        echo "over_voltage=2" >> /boot/config.txt
-                        echo "arm_freq=1350" >> /boot/config.txt
-                        echo "core_freq=500" >> /boot/config.txt
-                        echo "sdram_freq=500" >> /boot/config.txt
-                        success_msg "Overclock applied (Pi 3)"
-                    fi
-                    warning_msg "Reboot required for changes to take effect"
-                fi
-                pause
-                ;;
-            2)
-                info_msg "Optimizing GPU memory split..."
-                if grep -q "^gpu_mem=" /boot/config.txt; then
-                    sed -i 's/^gpu_mem=.*/gpu_mem=256/' /boot/config.txt
-                else
-                    echo "gpu_mem=256" >> /boot/config.txt
-                fi
-                success_msg "GPU memory set to 256MB"
-                warning_msg "Reboot required"
-                pause
-                ;;
-            3)
-                info_msg "Disabling unnecessary services..."
-                systemctl disable bluetooth.service 2>/dev/null || true
-                systemctl disable triggerhappy.service 2>/dev/null || true
-                systemctl disable avahi-daemon.service 2>/dev/null || true
-                success_msg "Services disabled"
-                pause
-                ;;
-            4)
-                info_msg "Enabling threaded video driver in RetroArch..."
-                find /opt/retropie/configs -name "retroarch.cfg" -exec sed -i 's/video_threaded = "false"/video_threaded = "true"/' {} \; 2>/dev/null || true
-                success_msg "Threaded video enabled"
-                pause
-                ;;
-            5)
-                info_msg "Optimizing swap settings..."
-                if [ -f /etc/dphys-swapfile ]; then
-                    sed -i 's/CONF_SWAPSIZE=100/CONF_SWAPSIZE=512/' /etc/dphys-swapfile
-                    systemctl restart dphys-swapfile
-                    success_msg "Swap optimized to 512MB"
-                else
-                    warning_msg "Swap configuration not found"
-                fi
-                pause
-                ;;
-            6)
-                warning_msg "This will apply ALL performance optimizations"
-                read -p "Continue? (y/n): " confirm
-                if [[ $confirm == [yY] ]]; then
-                    info_msg "Applying full performance package..."
-                    
-                    cp /boot/config.txt /boot/config.txt.backup
-                    echo "gpu_mem=256" >> /boot/config.txt
-                    systemctl disable bluetooth.service 2>/dev/null || true
-                    systemctl disable triggerhappy.service 2>/dev/null || true
-                    find /opt/retropie/configs -name "retroarch.cfg" -exec sed -i 's/video_threaded = "false"/video_threaded = "true"/' {} \; 2>/dev/null || true
-                    
-                    success_msg "All optimizations applied"
-                    warning_msg "Reboot recommended"
-                fi
-                pause
-                ;;
-            0)
-                break
-                ;;
-            *)
-                error_msg "Invalid option"
-                pause
-                ;;
-        esac
-    done
-}
-
-###############################################################################
-# GAME PORTS
-###############################################################################
-
-ports_menu() {
-    while true; do
-        show_banner
-        echo -e "${MAGENTA}${BOLD}GAME PORTS & ENGINES${NC}"
-        echo ""
-        echo "1) Install OpenBOR (Beat 'em up engine)"
-        echo "2) Install additional ScummVM games support"
-        echo "3) Install Doom (PrBoom)"
-        echo "4) Install Quake (Tyrquake)"
-        echo "5) Install Cave Story"
-        echo "6) Install Sonic Robo Blast 2"
-        echo ""
-        echo "0) Back to Main Menu"
-        echo ""
-        read -p "Select option: " choice
-        
-        case $choice in
-            1)
-                info_msg "Installing OpenBOR..."
-                if [ -d "/opt/retropie/supplementary/openbor" ]; then
-                    warning_msg "OpenBOR already installed"
-                else
-                    cd /home/$ACTUAL_USER/RetroPie-Setup
-                    sudo -u $ACTUAL_USER ./retropie_packages.sh openbor
-                    success_msg "OpenBOR installed"
-                    info_msg "Place .pak files in: $ROMS_DIR/ports/openbor"
-                fi
-                pause
-                ;;
-            2)
-                info_msg "ScummVM is already part of RetroPie"
-                info_msg "Installing additional dependencies..."
-                apt-get install -y scummvm-data 2>/dev/null || true
-                success_msg "Additional ScummVM support installed"
-                info_msg "Place game folders in: $ROMS_DIR/scummvm"
-                pause
-                ;;
-            3)
-                info_msg "Installing Doom (PrBoom)..."
-                apt-get install -y prboom-plus 2>/dev/null || true
-                mkdir -p "$ROMS_DIR/ports/doom"
-                success_msg "Doom support installed"
-                info_msg "Place .wad files in: $ROMS_DIR/ports/doom"
-                pause
-                ;;
-            4)
-                info_msg "Installing Quake..."
-                cd /home/$ACTUAL_USER/RetroPie-Setup
-                sudo -u $ACTUAL_USER ./retropie_packages.sh tyrquake
-                success_msg "Quake installed"
-                pause
-                ;;
-            5)
-                info_msg "Installing Cave Story..."
-                cd /home/$ACTUAL_USER/RetroPie-Setup
-                sudo -u $ACTUAL_USER ./retropie_packages.sh cavestory
-                success_msg "Cave Story installed"
-                pause
-                ;;
-            6)
-                info_msg "Installing Sonic Robo Blast 2..."
-                cd /home/$ACTUAL_USER/RetroPie-Setup
-                sudo -u $ACTUAL_USER ./retropie_packages.sh srb2
-                success_msg "SRB2 installed"
-                pause
-                ;;
-            0)
-                break
-                ;;
-            *)
-                error_msg "Invalid option"
-                pause
-                ;;
-        esac
-    done
-}
-
-###############################################################################
-# UTILITIES AND TOOLS
-###############################################################################
-
-utilities_menu() {
-    while true; do
-        show_banner
-        echo -e "${MAGENTA}${BOLD}UTILITIES & TOOLS${NC}"
-        echo ""
-        echo "1) Install Skyscraper (ROM scraper)"
-        echo "2) Install Kodi Media Center"
-        echo "3) Install Moonlight Game Streaming"
-        echo "4) Install File Manager (Midnight Commander)"
-        echo "5) Setup Samba Shares (Network file access)"
-        echo "6) Install Retropie Manager (Web interface)"
-        echo "7) Install Bluetooth Audio Support"
-        echo ""
-        echo "0) Back to Main Menu"
-        echo ""
-        read -p "Select option: " choice
-        
-        case $choice in
-            1)
-                info_msg "Installing Skyscraper..."
-                cd /home/$ACTUAL_USER/RetroPie-Setup
-                sudo -u $ACTUAL_USER ./retropie_packages.sh skyscraper
-                success_msg "Skyscraper installed"
-                info_msg "Run from RetroPie menu or use: Skyscraper -p [system]"
-                pause
-                ;;
-            2)
-                info_msg "Installing Kodi..."
-                cd /home/$ACTUAL_USER/RetroPie-Setup
-                sudo -u $ACTUAL_USER ./retropie_packages.sh kodi
-                success_msg "Kodi installed"
-                pause
-                ;;
-            3)
-                info_msg "Installing Moonlight..."
-                cd /home/$ACTUAL_USER/RetroPie-Setup
-                sudo -u $ACTUAL_USER ./retropie_packages.sh moonlight
-                success_msg "Moonlight installed"
-                pause
-                ;;
-            4)
-                info_msg "Installing Midnight Commander..."
-                apt-get install -y mc
-                success_msg "File manager installed. Run with: mc"
-                pause
-                ;;
-            5)
-                info_msg "Setting up Samba shares..."
-                cd /home/$ACTUAL_USER/RetroPie-Setup
-                sudo -u $ACTUAL_USER ./retropie_packages.sh samba depends
-                sudo -u $ACTUAL_USER ./retropie_packages.sh samba install_share
-                success_msg "Samba configured"
-                info_msg "Access via: \\\\retropie (Windows) or smb://retropie (Linux/Mac)"
-                pause
-                ;;
-            6)
-                info_msg "Installing RetroPie Manager..."
-                wget -O - https://raw.githubusercontent.com/botolo78/RetroPie-Manager/master/install.sh | bash
-                success_msg "RetroPie Manager installed"
-                info_msg "Access at: http://$(hostname -I | awk '{print $1}'):8000"
-                pause
-                ;;
-            7)
-                info_msg "Installing Bluetooth audio support..."
-                apt-get install -y pulseaudio pulseaudio-module-bluetooth bluez-tools
-                success_msg "Bluetooth audio installed"
-                info_msg "Pair devices with: bluetoothctl"
-                pause
-                ;;
-            0)
-                break
-                ;;
-            *)
-                error_msg "Invalid option"
-                pause
-                ;;
-        esac
-    done
-}
-
-###############################################################################
-# MAIN MENU
-###############################################################################
-
+# Main menu
 main_menu() {
+    local manifest_file=$(download_manifest)
+    
+    if [ ! -f "$manifest_file" ]; then
+        echo "Failed to load manifest. Exiting."
+        exit 1
+    fi
+    
     while true; do
-        show_banner
-        echo -e "${BOLD}MAIN MENU${NC}"
-        echo ""
-        echo "1) Themes & UI Improvements"
-        echo "2) Performance Optimizations"
-        echo "3) Game Ports & Engines"
-        echo "4) Utilities & Tools"
-        echo ""
-        echo "5) System Information"
-        echo "6) View Log File"
-        echo ""
-        echo "0) Exit"
-        echo ""
-        read -p "Select option: " choice
+        local choice=$(dialog --clear --title "RetroKISS - RetroPie Enhancement Suite" \
+            --menu "Choose a category:" 20 70 10 \
+            1 "Themes & UI Improvements" \
+            2 "Performance Optimizations" \
+            3 "Game Ports & Engines" \
+            4 "Utilities & Tools" \
+            5 "Update RetroKISS" \
+            6 "System Information" \
+            0 "Exit" \
+            2>&1 >/dev/tty)
+        
+        clear
         
         case $choice in
             1)
-                themes_menu
+                show_category_menu "themes" "Themes & UI Improvements"
                 ;;
             2)
-                performance_menu
+                show_category_menu "performance" "Performance Optimizations"
                 ;;
             3)
-                ports_menu
+                show_category_menu "ports" "Game Ports & Engines"
                 ;;
             4)
-                utilities_menu
+                show_category_menu "utilities" "Utilities & Tools"
                 ;;
             5)
-                show_banner
-                echo -e "${BOLD}SYSTEM INFORMATION${NC}"
-                echo ""
-                echo "Hostname: $(hostname)"
-                echo "IP Address: $(hostname -I | awk '{print $1}')"
-                echo "OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d'"' -f2)"
-                echo "Kernel: $(uname -r)"
-                if [ -f /proc/device-tree/model ]; then
-                    echo "Model: $(cat /proc/device-tree/model)"
-                else
-                    echo "Model: Unknown"
-                fi
-                echo "Memory: $(free -h | awk '/^Mem:/ {print $2}')"
-                echo "Disk Space: $(df -h / | awk 'NR==2 {print $4}') free"
-                echo ""
-                pause
-                ;;
-            6)
-                if [ -f "$LOG_FILE" ]; then
-                    less "$LOG_FILE"
-                else
-                    warning_msg "No log file found"
-                    pause
-                fi
-                ;;
-            0)
-                echo ""
-                info_msg "Thanks for using RetroKISS!"
+                dialog --title "Update" --infobox "Updating RetroKISS from GitHub..." 5 50
+                cd "$SCRIPT_DIR"
+                git pull origin main 2>/dev/null || {
+                    wget -q -O retrokiss.sh "$GITHUB_REPO/retrokiss.sh"
+                    chmod +x retrokiss.sh
+                }
+                dialog --title "Success" --msgbox "RetroKISS updated! Please restart the script." 6 50
                 exit 0
                 ;;
-            *)
-                error_msg "Invalid option"
-                pause
+            6)
+                local sysinfo="Hostname: $(hostname)\n"
+                sysinfo+="IP Address: $(hostname -I | awk '{print $1}')\n"
+                sysinfo+="OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d'\"' -f2)\n"
+                sysinfo+="Kernel: $(uname -r)\n"
+                if [ -f /proc/device-tree/model ]; then
+                    sysinfo+="Model: $(cat /proc/device-tree/model)\n"
+                fi
+                sysinfo+="Memory: $(free -h | awk '/^Mem:/ {print $2}')\n"
+                sysinfo+="Disk Free: $(df -h / | awk 'NR==2 {print $4}')"
+                
+                dialog --title "System Information" --msgbox "$sysinfo" 15 60
+                ;;
+            0|*)
+                dialog --title "Goodbye" --infobox "Thanks for using RetroKISS!" 5 40
+                sleep 2
+                clear
+                exit 0
                 ;;
         esac
     done
 }
 
-###############################################################################
-# STARTUP
-###############################################################################
-
+# Startup
 log "RetroKISS started"
 check_dependencies
 main_menu
