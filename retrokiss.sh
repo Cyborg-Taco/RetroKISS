@@ -15,7 +15,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 BOLD='\033[1m'
 
 # Configuration
@@ -44,12 +44,12 @@ log() {
 show_banner() {
     clear
     echo -e "${CYAN}${BOLD}"
-    echo "╔════════════════════════════════════════════════════════════╗"
-    echo "║                                                            ║"
-    echo "║              RetroKISS - RetroPie Enhanced                 ║"
-    echo "║         Kick-start Install Script Suite v1.0              ║"
-    echo "║                                                            ║"
-    echo "╚════════════════════════════════════════════════════════════╝"
+    echo "============================================================"
+    echo "                                                            "
+    echo "              RetroKISS - RetroPie Enhanced                 "
+    echo "         Kick-start Install Script Suite v1.0              "
+    echo "                                                            "
+    echo "============================================================"
     echo -e "${NC}"
 }
 
@@ -58,7 +58,7 @@ spinner() {
     local pid=$1
     local delay=0.1
     local spinstr='|/-\'
-    while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
+    while ps -p $pid > /dev/null 2>&1; do
         local temp=${spinstr#?}
         printf " [%c]  " "$spinstr"
         local spinstr=$temp${spinstr%"$temp"}
@@ -70,21 +70,21 @@ spinner() {
 
 # Success/Error messages
 success_msg() {
-    echo -e "${GREEN}✓ $1${NC}"
+    echo -e "${GREEN}[SUCCESS] $1${NC}"
     log "SUCCESS: $1"
 }
 
 error_msg() {
-    echo -e "${RED}✗ $1${NC}"
+    echo -e "${RED}[ERROR] $1${NC}"
     log "ERROR: $1"
 }
 
 info_msg() {
-    echo -e "${BLUE}ℹ $1${NC}"
+    echo -e "${BLUE}[INFO] $1${NC}"
 }
 
 warning_msg() {
-    echo -e "${YELLOW}⚠ $1${NC}"
+    echo -e "${YELLOW}[WARNING] $1${NC}"
 }
 
 # Pause function
@@ -99,7 +99,7 @@ check_dependencies() {
     local missing=()
     
     for dep in "${deps[@]}"; do
-        if ! command -v "$dep" &> /dev/null; then
+        if ! command -v "$dep" > /dev/null 2>&1; then
             missing+=("$dep")
         fi
     done
@@ -130,7 +130,9 @@ install_es_theme() {
     
     mkdir -p "/etc/emulationstation/themes"
     git clone --depth 1 "$theme_url" "$theme_dir" > /dev/null 2>&1 &
-    spinner $!
+    local git_pid=$!
+    spinner $git_pid
+    wait $git_pid
     
     if [ $? -eq 0 ]; then
         success_msg "Theme $theme_name installed successfully"
@@ -180,12 +182,9 @@ themes_menu() {
                 ;;
             6)
                 info_msg "Enabling video view support..."
-                # Enable video support in ES
                 if [ -f "/opt/retropie/configs/all/emulationstation/es_settings.cfg" ]; then
-                    sed -i 's/<bool name="VideoAudio" value="false"\/>/<bool name="VideoAudio" value="true"\/>/' \
-                        /opt/retropie/configs/all/emulationstation/es_settings.cfg
-                    sed -i 's/<bool name="EnableVideos" value="false"\/>/<bool name="EnableVideos" value="true"\/>/' \
-                        /opt/retropie/configs/all/emulationstation/es_settings.cfg
+                    sed -i 's/<bool name="VideoAudio" value="false"\/>/<bool name="VideoAudio" value="true"\/>/' /opt/retropie/configs/all/emulationstation/es_settings.cfg 2>/dev/null || true
+                    sed -i 's/<bool name="EnableVideos" value="false"\/>/<bool name="EnableVideos" value="true"\/>/' /opt/retropie/configs/all/emulationstation/es_settings.cfg 2>/dev/null || true
                     success_msg "Video support enabled"
                 else
                     warning_msg "ES settings file not found"
@@ -194,15 +193,12 @@ themes_menu() {
                 ;;
             7)
                 info_msg "Optimizing EmulationStation..."
-                # Disable unwanted ES features for performance
-                cat > /tmp/es_optimize.sh << 'EOF'
-# Disable transitions
-sed -i 's/<string name="TransitionStyle" value=".*"\/>/<string name="TransitionStyle" value="instant"\/>/' \
-    /opt/retropie/configs/all/emulationstation/es_settings.cfg 2>/dev/null || true
-EOF
-                bash /tmp/es_optimize.sh
-                rm /tmp/es_optimize.sh
-                success_msg "EmulationStation optimized"
+                if [ -f "/opt/retropie/configs/all/emulationstation/es_settings.cfg" ]; then
+                    sed -i 's/<string name="TransitionStyle" value=".*"\/>/<string name="TransitionStyle" value="instant"\/>/' /opt/retropie/configs/all/emulationstation/es_settings.cfg 2>/dev/null || true
+                    success_msg "EmulationStation optimized"
+                else
+                    warning_msg "ES settings file not found"
+                fi
                 pause
                 ;;
             0)
@@ -242,28 +238,22 @@ performance_menu() {
                 warning_msg "This will modify /boot/config.txt"
                 read -p "Continue? (y/n): " confirm
                 if [[ $confirm == [yY] ]]; then
-                    # Backup config
                     cp /boot/config.txt /boot/config.txt.backup
                     
-                    # Add overclock settings for Pi 4
                     if grep -q "Raspberry Pi 4" /proc/cpuinfo; then
-                        cat >> /boot/config.txt << EOF
-
-# RetroKISS Overclock Settings (Pi 4)
-over_voltage=6
-arm_freq=2000
-gpu_freq=750
-EOF
+                        echo "" >> /boot/config.txt
+                        echo "# RetroKISS Overclock Settings (Pi 4)" >> /boot/config.txt
+                        echo "over_voltage=6" >> /boot/config.txt
+                        echo "arm_freq=2000" >> /boot/config.txt
+                        echo "gpu_freq=750" >> /boot/config.txt
                         success_msg "Overclock applied (Pi 4)"
                     else
-                        cat >> /boot/config.txt << EOF
-
-# RetroKISS Overclock Settings (Pi 3)
-over_voltage=2
-arm_freq=1350
-core_freq=500
-sdram_freq=500
-EOF
+                        echo "" >> /boot/config.txt
+                        echo "# RetroKISS Overclock Settings (Pi 3)" >> /boot/config.txt
+                        echo "over_voltage=2" >> /boot/config.txt
+                        echo "arm_freq=1350" >> /boot/config.txt
+                        echo "core_freq=500" >> /boot/config.txt
+                        echo "sdram_freq=500" >> /boot/config.txt
                         success_msg "Overclock applied (Pi 3)"
                     fi
                     warning_msg "Reboot required for changes to take effect"
@@ -272,7 +262,6 @@ EOF
                 ;;
             2)
                 info_msg "Optimizing GPU memory split..."
-                # Set GPU memory to 256MB for better emulation
                 if grep -q "^gpu_mem=" /boot/config.txt; then
                     sed -i 's/^gpu_mem=.*/gpu_mem=256/' /boot/config.txt
                 else
@@ -292,7 +281,7 @@ EOF
                 ;;
             4)
                 info_msg "Enabling threaded video driver in RetroArch..."
-                find /opt/retropie/configs -name "retroarch.cfg" -exec sed -i 's/video_threaded = "false"/video_threaded = "true"/' {} \;
+                find /opt/retropie/configs -name "retroarch.cfg" -exec sed -i 's/video_threaded = "false"/video_threaded = "true"/' {} \; 2>/dev/null || true
                 success_msg "Threaded video enabled"
                 pause
                 ;;
@@ -313,12 +302,11 @@ EOF
                 if [[ $confirm == [yY] ]]; then
                     info_msg "Applying full performance package..."
                     
-                    # Run all optimizations
                     cp /boot/config.txt /boot/config.txt.backup
                     echo "gpu_mem=256" >> /boot/config.txt
                     systemctl disable bluetooth.service 2>/dev/null || true
                     systemctl disable triggerhappy.service 2>/dev/null || true
-                    find /opt/retropie/configs -name "retroarch.cfg" -exec sed -i 's/video_threaded = "false"/video_threaded = "true"/' {} \;
+                    find /opt/retropie/configs -name "retroarch.cfg" -exec sed -i 's/video_threaded = "false"/video_threaded = "true"/' {} \; 2>/dev/null || true
                     
                     success_msg "All optimizations applied"
                     warning_msg "Reboot recommended"
@@ -543,7 +531,11 @@ main_menu() {
                 echo "IP Address: $(hostname -I | awk '{print $1}')"
                 echo "OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d'"' -f2)"
                 echo "Kernel: $(uname -r)"
-                echo "Model: $(cat /proc/device-tree/model 2>/dev/null || echo 'Unknown')"
+                if [ -f /proc/device-tree/model ]; then
+                    echo "Model: $(cat /proc/device-tree/model)"
+                else
+                    echo "Model: Unknown"
+                fi
                 echo "Memory: $(free -h | awk '/^Mem:/ {print $2}')"
                 echo "Disk Space: $(df -h / | awk 'NR==2 {print $4}') free"
                 echo ""
@@ -574,7 +566,6 @@ main_menu() {
 # STARTUP
 ###############################################################################
 
-# Initialize
 log "RetroKISS started"
 check_dependencies
 main_menu
