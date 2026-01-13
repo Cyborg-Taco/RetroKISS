@@ -78,6 +78,25 @@
       "display_name": "Game Ports & Engines",
       "items": [
         {
+          "id": "Install_Tiny_Crate.sh",
+          "name": "Tiny Crate",
+          "description": "Crate-chucking action puzzler
+                        Tiny Crate is a cute little precision platformer with puzzle elements!
+                        
+                        Lift and toss crates to traverse over spike pits and reach higher ground!
+                        
+                        Weigh down buttons to create platforms and solve the puzzle!
+                        
+                        Push yourself and make tight jumps! You got this! <3 (:
+                        
+                        Controls:
+                        
+                        Arrows - Move
+                        X - Jump / Select
+                        C - Lift & Toss / Back
+                        Enter - Menu to run: flatpak run net.hhoney.tinycrate or launch from games"
+        }
+        {
           "id": "install_openbor.sh",
           "name": "OpenBOR",
           "description": "Beat 'em up game engine"
