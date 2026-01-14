@@ -138,7 +138,7 @@ Add to the appropriate category in `manifest.json`:
   "id": "your_script.sh",
   "name": "Display Name",
   "description": "Brief description"
-}
+},
 ```
 
 ## Requirements
