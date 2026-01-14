@@ -15,6 +15,8 @@ CACHE_DIR="$SCRIPT_DIR/.retrokiss_cache"
 STATE_DIR="$SCRIPT_DIR/.retrokiss_state"
 CONFIG_FILE="$SCRIPT_DIR/retrokiss.conf"
 LOG_FILE="$SCRIPT_DIR/retrokiss.log"
+MANIFEST_FILE="$CACHE_DIR/manifest.json"
+OLD_MANIFEST_FILE="$CACHE_DIR/manifest.old.json"
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then 
@@ -56,14 +58,23 @@ check_dependencies() {
 # Download manifest from GitHub
 download_manifest() {
     local manifest_url="$GITHUB_REPO/manifest.json"
-    local manifest_file="$CACHE_DIR/manifest.json"
+    local temp_manifest="$CACHE_DIR/manifest.new.json"
     
-    wget -q -O "$manifest_file" "$manifest_url" 2>/dev/null || {
+    # Download new manifest
+    wget -q -O "$temp_manifest" "$manifest_url" 2>/dev/null || {
         dialog --title "Error" --msgbox "Failed to download manifest from GitHub.\nCheck your internet connection." 8 50
         return 1
     }
     
-    echo "$manifest_file"
+    # If old manifest exists, save it
+    if [ -f "$MANIFEST_FILE" ]; then
+        cp "$MANIFEST_FILE" "$OLD_MANIFEST_FILE"
+    fi
+    
+    # Move new manifest to active position
+    mv "$temp_manifest" "$MANIFEST_FILE"
+    
+    echo "$MANIFEST_FILE"
 }
 
 # Check if package is installed
@@ -72,10 +83,19 @@ is_installed() {
     [ -f "$STATE_DIR/${script_id}.installed" ]
 }
 
+# Get installed version/timestamp
+get_installed_version() {
+    local script_id=$1
+    if [ -f "$STATE_DIR/${script_id}.installed" ]; then
+        cat "$STATE_DIR/${script_id}.installed"
+    else
+        echo "0"
+    fi
+}
+
 # Mark package as installed
 mark_installed() {
     local script_id=$1
-    touch "$STATE_DIR/${script_id}.installed"
     date +%s > "$STATE_DIR/${script_id}.installed"
 }
 
@@ -85,12 +105,81 @@ mark_uninstalled() {
     rm -f "$STATE_DIR/${script_id}.installed"
 }
 
+# Get script version from GitHub (modified time)
+get_remote_version() {
+    local script_id=$1
+    local script_url="$GITHUB_REPO/scripts/$script_id"
+    
+    # Get Last-Modified header
+    local remote_date=$(curl -sI "$script_url" | grep -i "last-modified" | cut -d' ' -f2-)
+    if [ -n "$remote_date" ]; then
+        date -d "$remote_date" +%s 2>/dev/null || echo "0"
+    else
+        echo "0"
+    fi
+}
+
+# Check if update is available
+has_update() {
+    local script_id=$1
+    
+    if ! is_installed "$script_id"; then
+        return 1
+    fi
+    
+    local installed_ver=$(get_installed_version "$script_id")
+    local remote_ver=$(get_remote_version "$script_id")
+    
+    [ "$remote_ver" -gt "$installed_ver" ]
+}
+
+# Get all packages with updates available
+get_packages_with_updates() {
+    local manifest_file=$1
+    local items_with_updates=()
+    
+    # Get all script IDs from manifest
+    local all_scripts=$(jq -r '.categories[].items[].id' "$manifest_file")
+    
+    for script_id in $all_scripts; do
+        if has_update "$script_id"; then
+            items_with_updates+=("$script_id")
+        fi
+    done
+    
+    echo "${items_with_updates[@]}"
+}
+
+# Get new packages (in current manifest but not in old manifest)
+get_new_packages() {
+    if [ ! -f "$OLD_MANIFEST_FILE" ]; then
+        return 0
+    fi
+    
+    local new_items=()
+    
+    # Get all script IDs from current manifest
+    local current_scripts=$(jq -r '.categories[].items[].id' "$MANIFEST_FILE")
+    
+    # Get all script IDs from old manifest
+    local old_scripts=$(jq -r '.categories[].items[].id' "$OLD_MANIFEST_FILE" 2>/dev/null || echo "")
+    
+    # Find scripts in current but not in old
+    for script_id in $current_scripts; do
+        if ! echo "$old_scripts" | grep -q "^${script_id}$"; then
+            new_items+=("$script_id")
+        fi
+    done
+    
+    echo "${new_items[@]}"
+}
+
 # Get package info from manifest
 get_package_info() {
     local manifest_file=$1
     local script_id=$2
     
-    jq -r ".categories[].items[] | select(.id==\"$script_id\") | .name + \"|\" + .description" "$manifest_file"
+    jq -r ".categories[].items[] | select(.id==\"$script_id\") | \"\(.name)|\(.description)\"" "$manifest_file"
 }
 
 # Parse manifest and build menu
@@ -122,7 +211,7 @@ download_script() {
 # Show package details and actions
 show_package_menu() {
     local script_id=$1
-    local manifest_file="$CACHE_DIR/manifest.json"
+    local manifest_file="$MANIFEST_FILE"
     
     # Get package info
     local info=$(get_package_info "$manifest_file" "$script_id")
@@ -134,7 +223,11 @@ show_package_menu() {
         local status_text=""
         
         if is_installed "$script_id"; then
-            status_text="[INSTALLED]"
+            if has_update "$script_id"; then
+                status_text="[INSTALLED - UPDATE AVAILABLE]"
+            else
+                status_text="[INSTALLED]"
+            fi
             menu_items+=("1" "Update")
             menu_items+=("2" "Remove")
         else
@@ -211,11 +304,59 @@ show_package_menu() {
     done
 }
 
-# Build dynamic menu from manifest
+# Show dynamic category menu (for Updates and New)
+show_dynamic_menu() {
+    local title=$1
+    shift
+    local script_ids=("$@")
+    
+    if [ ${#script_ids[@]} -eq 0 ]; then
+        dialog --title "$title" --msgbox "No items found in this category." 7 50
+        return
+    fi
+    
+    while true; do
+        local menu_items=()
+        local counter=1
+        
+        for script_id in "${script_ids[@]}"; do
+            local info=$(get_package_info "$MANIFEST_FILE" "$script_id")
+            local name=$(echo "$info" | cut -d'|' -f1)
+            
+            local status=""
+            if is_installed "$script_id"; then
+                status="[✓]"
+            else
+                status="[NEW]"
+            fi
+            
+            menu_items+=("$counter" "$status $name")
+            counter=$((counter + 1))
+        done
+        
+        menu_items+=("0" "Back to Main Menu")
+        
+        local choice=$(dialog --clear --title "$title" \
+            --menu "Select a package:" 20 70 15 \
+            "${menu_items[@]}" \
+            2>&1 >/dev/tty)
+        
+        clear
+        
+        if [ $? -ne 0 ] || [ "$choice" = "0" ]; then
+            break
+        fi
+        
+        local selected_id="${script_ids[$((choice-1))]}"
+        show_package_menu "$selected_id"
+    done
+}
+
+# Build category menu from manifest
 show_category_menu() {
     local category=$1
     local title=$2
-    local manifest_file="$CACHE_DIR/manifest.json"
+    local manifest_file="$MANIFEST_FILE"
     
     while true; do
         local menu_items=()
@@ -225,7 +366,11 @@ show_category_menu() {
         while IFS='|' read -r id name description; do
             local status=""
             if is_installed "$id"; then
-                status="[✓]"
+                if has_update "$id"; then
+                    status="[↑]"
+                else
+                    status="[✓]"
+                fi
             else
                 status="[ ]"
             fi
@@ -238,7 +383,7 @@ show_category_menu() {
         
         # Show menu
         local choice=$(dialog --clear --title "$title" \
-            --menu "Select a package:" 20 70 15 \
+            --menu "Select a package:\n[✓]=Installed [↑]=Update Available [ ]=Not Installed" 20 70 15 \
             "${menu_items[@]}" \
             2>&1 >/dev/tty)
         
@@ -268,14 +413,22 @@ main_menu() {
     fi
     
     while true; do
+        # Count items for dynamic menus
+        local updates_array=($(get_packages_with_updates "$manifest_file"))
+        local new_array=($(get_new_packages))
+        local update_count=${#updates_array[@]}
+        local new_count=${#new_array[@]}
+        
         local choice=$(dialog --clear --title "RetroKISS - RetroPie Enhancement Suite" \
-            --menu "Choose a category:" 20 70 10 \
-            1 "Themes & UI Improvements" \
-            2 "Performance Optimizations" \
-            3 "Game Ports & Engines" \
-            4 "Utilities & Tools" \
-            5 "Update RetroKISS" \
-            6 "System Information" \
+            --menu "Choose a category:" 22 70 12 \
+            1 "★ New Additions ($new_count)" \
+            2 "↑ Updates Available ($update_count)" \
+            3 "Themes & UI Improvements" \
+            4 "Performance Optimizations" \
+            5 "Game Ports & Engines" \
+            6 "Utilities & Tools" \
+            7 "Update RetroKISS" \
+            8 "System Information" \
             0 "Exit" \
             2>&1 >/dev/tty)
         
@@ -283,18 +436,24 @@ main_menu() {
         
         case $choice in
             1)
-                show_category_menu "themes" "Themes & UI Improvements"
+                show_dynamic_menu "New Additions" "${new_array[@]}"
                 ;;
             2)
-                show_category_menu "performance" "Performance Optimizations"
+                show_dynamic_menu "Updates Available" "${updates_array[@]}"
                 ;;
             3)
-                show_category_menu "ports" "Game Ports & Engines"
+                show_category_menu "themes" "Themes & UI Improvements"
                 ;;
             4)
-                show_category_menu "utilities" "Utilities & Tools"
+                show_category_menu "performance" "Performance Optimizations"
                 ;;
             5)
+                show_category_menu "ports" "Game Ports & Engines"
+                ;;
+            6)
+                show_category_menu "utilities" "Utilities & Tools"
+                ;;
+            7)
                 dialog --title "Update" --infobox "Updating RetroKISS from GitHub..." 5 50
                 cd "$SCRIPT_DIR"
                 git pull origin main 2>/dev/null || {
@@ -304,7 +463,7 @@ main_menu() {
                 dialog --title "Success" --msgbox "RetroKISS updated! Please restart the script." 6 50
                 exit 0
                 ;;
-            6)
+            8)
                 local sysinfo="Hostname: $(hostname)\n"
                 sysinfo+="IP Address: $(hostname -I | awk '{print $1}')\n"
                 sysinfo+="OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d'\"' -f2)\n"
@@ -313,9 +472,10 @@ main_menu() {
                     sysinfo+="Model: $(cat /proc/device-tree/model)\n"
                 fi
                 sysinfo+="Memory: $(free -h | awk '/^Mem:/ {print $2}')\n"
-                sysinfo+="Disk Free: $(df -h / | awk 'NR==2 {print $4}')"
+                sysinfo+="Disk Free: $(df -h / | awk 'NR==2 {print $4}')\n"
+                sysinfo+="\nInstalled Packages: $(ls -1 "$STATE_DIR" | grep .installed | wc -l)"
                 
-                dialog --title "System Information" --msgbox "$sysinfo" 15 60
+                dialog --title "System Information" --msgbox "$sysinfo" 17 60
                 ;;
             0|*)
                 dialog --title "Goodbye" --infobox "Thanks for using RetroKISS!" 5 40
