@@ -91,6 +91,7 @@ RetroKISS/
 
 ## Adding New Scripts
 
+If you don't have the expertize to do this just create a issue with the lable New Package
 To add a new script to RetroKISS:
 
 1. Create your script in the `scripts/` directory
