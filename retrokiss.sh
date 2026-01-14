@@ -139,7 +139,7 @@ get_packages_with_updates() {
     local items_with_updates=()
     
     # Get all script IDs from manifest
-    local all_scripts=$(jq -r '.categories[].items[].id' "$manifest_file")
+    local all_scripts=$(jq -r '.categories[].items[].id' "$manifest_file" 2>/dev/null)
     
     for script_id in $all_scripts; do
         if has_update "$script_id"; then
@@ -147,31 +147,34 @@ get_packages_with_updates() {
         fi
     done
     
-    echo "${items_with_updates[@]}"
+    printf "%s\n" "${items_with_updates[@]}"
 }
 
 # Get new packages (in current manifest but not in old manifest)
 get_new_packages() {
-    if [ ! -f "$OLD_MANIFEST_FILE" ]; then
-        return 0
-    fi
-    
     local new_items=()
     
     # Get all script IDs from current manifest
-    local current_scripts=$(jq -r '.categories[].items[].id' "$MANIFEST_FILE")
+    local current_scripts=$(jq -r '.categories[].items[].id' "$MANIFEST_FILE" 2>/dev/null)
     
-    # Get all script IDs from old manifest
-    local old_scripts=$(jq -r '.categories[].items[].id' "$OLD_MANIFEST_FILE" 2>/dev/null || echo "")
-    
-    # Find scripts in current but not in old
-    for script_id in $current_scripts; do
-        if ! echo "$old_scripts" | grep -q "^${script_id}$"; then
+    if [ ! -f "$OLD_MANIFEST_FILE" ]; then
+        # No old manifest - show all as new
+        for script_id in $current_scripts; do
             new_items+=("$script_id")
-        fi
-    done
+        done
+    else
+        # Get all script IDs from old manifest
+        local old_scripts=$(jq -r '.categories[].items[].id' "$OLD_MANIFEST_FILE" 2>/dev/null || echo "")
+        
+        # Find scripts in current but not in old
+        for script_id in $current_scripts; do
+            if ! echo "$old_scripts" | grep -q "^${script_id}$"; then
+                new_items+=("$script_id")
+            fi
+        done
+    fi
     
-    echo "${new_items[@]}"
+    printf "%s\n" "${new_items[@]}"
 }
 
 # Get package info from manifest
@@ -414,8 +417,17 @@ main_menu() {
     
     while true; do
         # Count items for dynamic menus
-        local updates_array=($(get_packages_with_updates "$manifest_file"))
-        local new_array=($(get_new_packages))
+        local updates_array=()
+        local new_array=()
+        
+        while IFS= read -r line; do
+            [ -n "$line" ] && updates_array+=("$line")
+        done < <(get_packages_with_updates "$manifest_file")
+        
+        while IFS= read -r line; do
+            [ -n "$line" ] && new_array+=("$line")
+        done < <(get_new_packages)
+        
         local update_count=${#updates_array[@]}
         local new_count=${#new_array[@]}
         
