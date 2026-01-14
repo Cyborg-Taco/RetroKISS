@@ -12,6 +12,7 @@ set -e
 GITHUB_REPO="https://raw.githubusercontent.com/Cyborg-Taco/RetroKISS/main"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CACHE_DIR="$SCRIPT_DIR/.retrokiss_cache"
+STATE_DIR="$SCRIPT_DIR/.retrokiss_state"
 CONFIG_FILE="$SCRIPT_DIR/retrokiss.conf"
 LOG_FILE="$SCRIPT_DIR/retrokiss.log"
 
@@ -25,8 +26,9 @@ fi
 ACTUAL_USER="${SUDO_USER:-$USER}"
 ACTUAL_HOME=$(eval echo "~$ACTUAL_USER")
 
-# Create cache directory
+# Create directories
 mkdir -p "$CACHE_DIR"
+mkdir -p "$STATE_DIR"
 
 # Logging function
 log() {
@@ -64,6 +66,33 @@ download_manifest() {
     echo "$manifest_file"
 }
 
+# Check if package is installed
+is_installed() {
+    local script_id=$1
+    [ -f "$STATE_DIR/${script_id}.installed" ]
+}
+
+# Mark package as installed
+mark_installed() {
+    local script_id=$1
+    touch "$STATE_DIR/${script_id}.installed"
+    date +%s > "$STATE_DIR/${script_id}.installed"
+}
+
+# Mark package as uninstalled
+mark_uninstalled() {
+    local script_id=$1
+    rm -f "$STATE_DIR/${script_id}.installed"
+}
+
+# Get package info from manifest
+get_package_info() {
+    local manifest_file=$1
+    local script_id=$2
+    
+    jq -r ".categories[].items[] | select(.id==\"$script_id\") | .name + \"|\" + .description" "$manifest_file"
+}
+
 # Parse manifest and build menu
 parse_manifest() {
     local manifest_file=$1
@@ -73,41 +102,113 @@ parse_manifest() {
         return 1
     fi
     
-    # Extract items for the category
     jq -r ".categories[] | select(.name==\"$category\") | .items[] | \"\(.id)|\(.name)|\(.description)\"" "$manifest_file"
 }
 
-# Download and execute script
-run_script() {
+# Download script
+download_script() {
     local script_name=$1
     local script_url="$GITHUB_REPO/scripts/$script_name"
     local script_file="$CACHE_DIR/$script_name"
     
-    # Show progress
-    dialog --title "Downloading" --infobox "Downloading $script_name..." 5 50
-    
-    # Download script
     wget -q -O "$script_file" "$script_url" 2>/dev/null || {
-        dialog --title "Error" --msgbox "Failed to download script: $script_name" 8 50
         return 1
     }
     
-    # Make executable
     chmod +x "$script_file"
+    echo "$script_file"
+}
+
+# Show package details and actions
+show_package_menu() {
+    local script_id=$1
+    local manifest_file="$CACHE_DIR/manifest.json"
     
-    # Execute script
-    clear
-    bash "$script_file"
-    local exit_code=$?
+    # Get package info
+    local info=$(get_package_info "$manifest_file" "$script_id")
+    local name=$(echo "$info" | cut -d'|' -f1)
+    local description=$(echo "$info" | cut -d'|' -f2)
     
-    # Show result
-    if [ $exit_code -eq 0 ]; then
-        dialog --title "Success" --msgbox "Script completed successfully!" 6 40
-    else
-        dialog --title "Error" --msgbox "Script failed with exit code: $exit_code" 8 50
-    fi
-    
-    return $exit_code
+    while true; do
+        local menu_items=()
+        local status_text=""
+        
+        if is_installed "$script_id"; then
+            status_text="[INSTALLED]"
+            menu_items+=("1" "Update")
+            menu_items+=("2" "Remove")
+        else
+            status_text="[NOT INSTALLED]"
+            menu_items+=("1" "Install")
+        fi
+        
+        menu_items+=("0" "Back")
+        
+        local choice=$(dialog --clear --title "$name $status_text" \
+            --menu "$description\n\nChoose an action:" 18 70 10 \
+            "${menu_items[@]}" \
+            2>&1 >/dev/tty)
+        
+        clear
+        
+        case $choice in
+            1)
+                if is_installed "$script_id"; then
+                    # Update
+                    dialog --title "Updating" --infobox "Updating $name..." 5 50
+                    local script_file=$(download_script "$script_id")
+                    if [ -n "$script_file" ]; then
+                        clear
+                        if bash "$script_file" "update"; then
+                            mark_installed "$script_id"
+                            dialog --title "Success" --msgbox "$name updated successfully!" 6 40
+                        else
+                            dialog --title "Error" --msgbox "Update failed!" 6 40
+                        fi
+                    else
+                        dialog --title "Error" --msgbox "Failed to download update" 6 40
+                    fi
+                else
+                    # Install
+                    dialog --title "Installing" --infobox "Installing $name..." 5 50
+                    local script_file=$(download_script "$script_id")
+                    if [ -n "$script_file" ]; then
+                        clear
+                        if bash "$script_file" "install"; then
+                            mark_installed "$script_id"
+                            dialog --title "Success" --msgbox "$name installed successfully!" 6 40
+                        else
+                            dialog --title "Error" --msgbox "Installation failed!" 6 40
+                        fi
+                    else
+                        dialog --title "Error" --msgbox "Failed to download script" 6 40
+                    fi
+                fi
+                ;;
+            2)
+                # Remove
+                if is_installed "$script_id"; then
+                    dialog --title "Confirm" --yesno "Are you sure you want to remove $name?" 7 50
+                    if [ $? -eq 0 ]; then
+                        dialog --title "Removing" --infobox "Removing $name..." 5 50
+                        local script_file=$(download_script "$script_id")
+                        if [ -n "$script_file" ]; then
+                            clear
+                            if bash "$script_file" "remove"; then
+                                mark_uninstalled "$script_id"
+                                dialog --title "Success" --msgbox "$name removed successfully!" 6 40
+                            else
+                                dialog --title "Error" --msgbox "Removal failed!" 6 40
+                            fi
+                        fi
+                    fi
+                fi
+                ;;
+            0|*)
+                break
+                ;;
+        esac
+    done
 }
 
 # Build dynamic menu from manifest
@@ -122,7 +223,13 @@ show_category_menu() {
         
         # Parse manifest for this category
         while IFS='|' read -r id name description; do
-            menu_items+=("$counter" "$name")
+            local status=""
+            if is_installed "$id"; then
+                status="[✓]"
+            else
+                status="[ ]"
+            fi
+            menu_items+=("$counter" "$status $name")
             counter=$((counter + 1))
         done < <(parse_manifest "$manifest_file" "$category")
         
@@ -131,7 +238,7 @@ show_category_menu() {
         
         # Show menu
         local choice=$(dialog --clear --title "$title" \
-            --menu "Select an option:" 20 70 15 \
+            --menu "Select a package:" 20 70 15 \
             "${menu_items[@]}" \
             2>&1 >/dev/tty)
         
@@ -146,8 +253,8 @@ show_category_menu() {
         local selected_line=$(parse_manifest "$manifest_file" "$category" | sed -n "${choice}p")
         local script_id=$(echo "$selected_line" | cut -d'|' -f1)
         
-        # Run the script
-        run_script "$script_id"
+        # Show package menu
+        show_package_menu "$script_id"
     done
 }
 
