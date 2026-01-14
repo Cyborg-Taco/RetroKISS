@@ -91,13 +91,13 @@ RetroKISS/
 
 ## Adding New Scripts
 
-If you don't have the expertize to do this just create a issue with the lable New Package
+If you don't have the expertize to do this just create a issue with the lable New Package Request
 To add a new script to RetroKISS:
 
 1. Create your script in the `scripts/` directory
 2. Follow the script template (see example below)
 3. Add an entry to `manifest.json` in the appropriate category
-4. Commit and push to GitHub
+4. Commit and push to GitHub Make sure to add the New Package label so i know
 
 ### Script Template
 
