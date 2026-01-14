@@ -39,13 +39,24 @@
       ]
     },
     {
+      "name": "emulators",
+      "display_name": "Emulators",
+      "items": [
+        {
+          "id": "install_dolphin.sh",
+          "name": "Dolphin",
+          "description": "GameCube and Wii emulator"
+        }
+      ]
+    },
+    {
       "name": "ports",
       "display_name": "Game Ports & Engines",
       "items": [
         {
-           "id": "install_minecraft_bedrock.sh",
-           "name": "Minecraft Bedrock Edition",
-           "description": "Install Minecraft Bedrock via Flatpak"
+          "id": "install_minecraft_bedrock.sh",
+          "name": "Minecraft Bedrock Edition",
+          "description": "Install Minecraft Bedrock via Flatpak"
         },
         {
           "id": "install_openbor.sh",
