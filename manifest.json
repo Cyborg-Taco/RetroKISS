@@ -43,6 +43,11 @@
       "display_name": "Game Ports & Engines",
       "items": [
         {
+          "id": "test.sh",
+          "name": "test",
+          "description": "Crate-chucking action puzzler"
+        },
+        {
            "id": "install_minecraft_bedrock.sh",
            "name": "Minecraft Bedrock Edition",
            "description": "Install Minecraft Bedrock via Flatpak"
