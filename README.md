@@ -10,19 +10,19 @@ A PiKISS-style menu-driven installer for RetroPie that makes it easy to install 
 
 ## Features
 
-### ð¨ Themes & UI Improvements
+### 🎨 Themes & UI Improvements
 - Multiple EmulationStation themes (Carbon, Pixel, Tronkyfran, ComicBook)
 - Video preview support
 - Performance optimizations for ES
 
-### â¡ Performance Optimizations
+### ⚡ Performance Optimizations
 - Safe overclock presets for Pi 3/4
 - GPU memory optimization
 - Service management
 - Threaded video drivers
 - Swap optimization
 
-### ð® Game Ports & Engines
+### 🎮 Game Ports & Engines
 - OpenBOR (Beat 'em up games)
 - Doom (PrBoom)
 - Quake
@@ -30,7 +30,7 @@ A PiKISS-style menu-driven installer for RetroPie that makes it easy to install 
 - Sonic Robo Blast 2
 - ScummVM extras
 
-### ð ï¸ Utilities & Tools
+### 🛠️ Utilities & Tools
 - Skyscraper (ROM scraper)
 - Kodi Media Center
 - Moonlight game streaming
@@ -41,8 +41,6 @@ A PiKISS-style menu-driven installer for RetroPie that makes it easy to install 
 
 ## Installation
 
-
-### Git Clone Method
 
 ```bash
 # Clone the repository
@@ -66,15 +64,15 @@ The script will automatically download and execute the selected installation scr
 
 ```
 RetroKISS/
-âââ retrokiss.sh           # Main installer script
-âââ manifest.json          # Defines all available scripts
-âââ scripts/               # Individual installation scripts
-â   âââ install_carbon_theme.sh
-â   âââ install_pixel_theme.sh
-â   âââ safe_overclock.sh
-â   âââ install_openbor.sh
-â   âââ ...
-âââ README.md
+├── retrokiss.sh           # Main installer script
+├── manifest.json          # Defines all available scripts
+├── scripts/               # Individual installation scripts
+│   ├── install_carbon_theme.sh
+│   ├── install_pixel_theme.sh
+│   ├── safe_overclock.sh
+│   ├── install_openbor.sh
+│   └── ...
+└── README.md
 ```
 
 ## Adding New Scripts
@@ -177,7 +175,7 @@ Contributions are welcome! Please:
 
 ## Credits
 
-Inspired by [PiKISS](https://github.com/jmcerrejon/PiKISS) by JosÃ© Manuel CerrejÃ³n
+Inspired by [PiKISS](https://github.com/jmcerrejon/PiKISS) by José Manuel Cerrejón
 
 ## License
 
