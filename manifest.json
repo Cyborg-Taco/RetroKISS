@@ -26,16 +26,7 @@
       "name": "performance",
       "display_name": "Performance Optimizations",
       "items": [
-        {
-          "id": "safe_overclock.sh",
-          "name": "Safe Overclock",
-          "description": "Apply safe overclock presets"
-        },
-        {
-          "id": "optimize_gpu_memory.sh",
-          "name": "Optimize GPU Memory",
-          "description": "Set optimal GPU memory split"
-        }
+
       ]
     },
     {
@@ -88,11 +79,6 @@
           "id": "install_kodi.sh",
           "name": "Kodi Media Center",
           "description": "Media center application"
-        },
-        {
-          "id": "setup_samba.sh",
-          "name": "Samba Network Shares",
-          "description": "Access ROMs over network"
         },
         {
           "id": "install_moonlight.sh",
